@@ -192,11 +192,11 @@ const cleanItem = itemCollection?.trim();
 console.log("Comparing:", `"${cleanItem}"`, "vs", `"${cleanTarget}"`);
       
       if (cleanTarget && cleanItem !== cleanTarget) {
-      console.log(" Skipping item due to collection mismatch");
+      console.log("❌ Skipping item due to collection mismatch");
       return; // Skip this item in the forEach
     }
 
-    console.log(" Collection matched");
+    console.log("✅ Collection matched");
       const matches = [...filterAttrs].some(attr => {
         const attrVal = (item.getAttribute(attr) || "").toLowerCase();
         return attrVal.includes(query);
