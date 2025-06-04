@@ -3,14 +3,12 @@ document.addEventListener("DOMContentLoaded", function () {
   const form = document.querySelector(".w-form, #search-form");
   const input = document.querySelector("input[name='query']");
   const originalList = document.querySelector(".w-dyn-list");
-  const allItems = originalList?.querySelectorAll(".w-dyn-item") || [];
+  const allItems = [...document.querySelectorAll(".w-dyn-item")];
   const searchResults = document.querySelector(".searchresults");
   const searchConfigDiv = document.querySelector("#search-config");
   const submitButton = form?.querySelector("input[type='submit'], button[type='submit']");
 
-  if (submitButton) {
-    submitButton.style.display = "none";
-  }
+  if (submitButton) submitButton.style.display = "none";
 
   if (!form || !input || !originalList || !searchResults || !searchConfigDiv) {
     console.warn("Search components not found.");
@@ -23,10 +21,19 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const paginationType = searchConfigDiv.getAttribute("data-pagination-type")?.toLowerCase() || "none";
   const itemsPerPage = parseInt(searchConfigDiv.getAttribute("data-items-per-page"), 10) || 10;
+  
   const searchBarType = searchConfigDiv.getAttribute("data-search-bar");
+const targetCollection = searchConfigDiv.getAttribute("data-target-collection"); // ✅ Add this line
+
 
   let currentPage = 1;
   let matchedClones = [];
+
+  // Dynamically collect all data-* attributes from first item
+  const filterAttrs = new Set();
+  allItems[0]?.getAttributeNames().forEach(attr => {
+    if (attr.startsWith("data-")) filterAttrs.add(attr);
+  });
 
   // Inject CSS styles dynamically
   const style = document.createElement("style");
@@ -66,10 +73,6 @@ document.addEventListener("DOMContentLoaded", function () {
       padding: 8px 15px;
       cursor: pointer;
     }
-    
-
-
-
   `;
   document.head.appendChild(style);
 
@@ -83,7 +86,6 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     iconContainer.style.cursor = "pointer";
     iconContainer.style.display = "";
-
     iconContainer.addEventListener("click", () => {
       form.style.display = "";
       iconContainer.style.display = "none";
@@ -95,13 +97,14 @@ document.addEventListener("DOMContentLoaded", function () {
     if (iconContainer) iconContainer.style.display = "none";
   }
 
-  // Text highlighting function
+  // Recursive highlight function
   function highlightText(element, query) {
-    const regex = new RegExp(`(${query})`, "gi");
-    element.childNodes.forEach((node) => {
+    const regex = new RegExp(query.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), "gi");
+
+    element.childNodes.forEach(node => {
       if (node.nodeType === Node.TEXT_NODE && regex.test(node.textContent)) {
         const span = document.createElement("span");
-        span.innerHTML = node.textContent.replace(regex, "<mark>$1</mark>");
+        span.innerHTML = node.textContent.replace(regex, match => `<mark>${match}</mark>`);
         element.replaceChild(span, node);
       } else if (node.nodeType === Node.ELEMENT_NODE) {
         highlightText(node, query);
@@ -109,7 +112,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // Render results with pagination buttons after the items
+  // Render search results with pagination
   function render(page = 1) {
     searchResults.innerHTML = "";
     currentPage = page;
@@ -118,19 +121,17 @@ document.addEventListener("DOMContentLoaded", function () {
     const end = start + itemsPerPage;
     const pageItems = matchedClones.slice(start, end).map(item => item.cloneNode(true));
 
-    // Append all items first
-    pageItems.forEach(item => {
-      searchResults.appendChild(item);
-    });
-
-    if (matchedClones.length === 0) {
+    if (pageItems.length === 0) {
       const msg = document.createElement("div");
       msg.textContent = "No results found.";
       searchResults.appendChild(msg);
       return;
     }
 
-    // Create pagination container
+    pageItems.forEach(item => {
+      searchResults.appendChild(item);
+    });
+
     const paginationContainer = document.createElement("div");
     paginationContainer.className = "pagination-container";
 
@@ -147,7 +148,6 @@ document.addEventListener("DOMContentLoaded", function () {
       if (totalPages > 1) {
         const nav = document.createElement("div");
         nav.className = "pagination-nav";
-
         for (let i = 1; i <= totalPages; i++) {
           const btn = document.createElement("button");
           btn.textContent = i;
@@ -159,16 +159,20 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
 
-    // Append pagination container after all items if it has buttons
     if (paginationContainer.children.length > 0) {
       searchResults.appendChild(paginationContainer);
     }
   }
 
-  // Input event - live search
+  
+
+
+  // Search input logic
   input.addEventListener("input", () => {
     const query = input.value.toLowerCase().trim();
     matchedClones = [];
+    
+    console.log("Target collection:", targetCollection);
 
     if (!query) {
       originalList.style.display = "block";
@@ -178,13 +182,29 @@ document.addEventListener("DOMContentLoaded", function () {
 
     originalList.style.display = "none";
 
-    allItems.forEach((item) => {
-      const match = [...item.querySelectorAll("*")].some((el) =>
-        (el.textContent || "").toLowerCase().includes(query)
-      );
-      if (match) {
+    allItems.forEach(item => {
+      
+      const itemCollection = item.getAttribute("data-filter-collection");
+  
+ const cleanTarget = targetCollection.replace(/^"(.*)"$/, '$1').trim();
+const cleanItem = itemCollection?.trim();
+
+console.log("Comparing:", `"${cleanItem}"`, "vs", `"${cleanTarget}"`);
+      
+      if (cleanTarget && cleanItem !== cleanTarget) {
+      console.log(" Skipping item due to collection mismatch");
+      return; // Skip this item in the forEach
+    }
+
+    console.log(" Collection matched");
+      const matches = [...filterAttrs].some(attr => {
+        const attrVal = (item.getAttribute(attr) || "").toLowerCase();
+        return attrVal.includes(query);
+      });
+
+      if (matches) {
         const clone = item.cloneNode(true);
-        [...clone.querySelectorAll("*")].forEach((el) => {
+        [...clone.querySelectorAll("*")].forEach(el => {
           if ((el.textContent || "").toLowerCase().includes(query)) {
             highlightText(el, query);
           }
